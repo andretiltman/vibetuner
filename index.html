@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stringworks — Guitar Tuner</title>
+<style>
+  :root{
+    --wood-dark:#241610;
+    --wood-mid:#3a2618;
+    --wood-grain:#2e1c12;
+    --panel:#181009;
+    --brass:#c9a227;
+    --brass-bright:#f0cf6e;
+    --brass-dim:#8a7020;
+    --ivory:#ede3d3;
+    --ivory-dim:#a89a84;
+    --warn:#b0503a;
+    --good:#7a9a6e;
+    --good-bright:#a8d197;
+  }
+
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0;
+    min-height:100%;
+    background:
+      radial-gradient(ellipse at 50% -10%, rgba(255,220,150,0.06), transparent 60%),
+      repeating-linear-gradient(100deg, var(--wood-grain) 0px, var(--wood-mid) 3px, var(--wood-grain) 7px, var(--wood-dark) 14px),
+      var(--wood-dark);
+    color:var(--ivory);
+    font-family:Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+
+  .rack{
+    width:100%;
+    max-width:420px;
+  }
+
+  .eyebrow{
+    font-family:ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    letter-spacing:0.3em;
+    font-size:11px;
+    color:var(--brass-dim);
+    text-transform:uppercase;
+    text-align:center;
+    margin:0 0 4px;
+  }
+
+  h1{
+    font-size:22px;
+    text-align:center;
+    margin:0 0 22px;
+    font-weight:400;
+    letter-spacing:0.04em;
+    color:var(--ivory);
+  }
+
+  .panel{
+    background:linear-gradient(180deg, #1d130c, var(--panel) 40%, #120b06);
+    border-radius:18px;
+    padding:26px 22px 22px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.04) inset,
+      0 0 0 1px rgba(0,0,0,0.6),
+      0 18px 40px rgba(0,0,0,0.55);
+    position:relative;
+  }
+
+  .panel::before{
+    content:"";
+    position:absolute; inset:8px;
+    border-radius:12px;
+    border:1px solid rgba(201,162,39,0.15);
+    pointer-events:none;
+  }
+
+  /* --- Gauge --- */
+  .gauge-wrap{ position:relative; margin:0 auto 6px; width:100%; max-width:320px; }
+  .gauge-wrap svg{ width:100%; display:block; overflow:visible; }
+
+  .tick{ stroke:var(--brass-dim); stroke-width:2; }
+  .tick.major{ stroke:var(--brass); stroke-width:3; }
+  .tick.center{ stroke:var(--good-bright); stroke-width:3.5; }
+  .tick-label{
+    font-family:ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size:9px;
+    fill:var(--ivory-dim);
+    text-anchor:middle;
+  }
+
+  .needle{
+    transform-origin:150px 150px;
+    transition:transform 90ms ease-out;
+  }
+  @media (prefers-reduced-motion: reduce){
+    .needle{ transition:none; }
+  }
+  .needle-line{
+    stroke:var(--brass-bright);
+    stroke-width:3;
+    stroke-linecap:round;
+    filter:drop-shadow(0 0 3px rgba(240,207,110,0.5));
+  }
+  .needle.in-tune .needle-line{
+    stroke:var(--good-bright);
+    filter:drop-shadow(0 0 6px rgba(168,209,151,0.75));
+  }
+  .pivot{ fill:var(--brass); stroke:#12100a; stroke-width:1.5; }
+
+  .readout{
+    text-align:center;
+    margin-top:-6px;
+  }
+
+  .note-big{
+    font-size:64px;
+    line-height:1;
+    letter-spacing:0.01em;
+    color:var(--ivory);
+    min-height:70px;
+  }
+  .note-big .accidental{
+    font-size:34px;
+    vertical-align:top;
+    color:var(--brass-bright);
+  }
+  .note-big .octave{
+    font-size:24px;
+    color:var(--ivory-dim);
+    vertical-align:baseline;
+  }
+
+  .sub-readout{
+    font-family:ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size:13px;
+    color:var(--ivory-dim);
+    display:flex;
+    justify-content:center;
+    gap:18px;
+    margin-top:2px;
+  }
+  .sub-readout .cents{ color:var(--brass-bright); }
+  .sub-readout .cents.in-tune{ color:var(--good-bright); }
+
+  .status-line{
+    text-align:center;
+    font-family:ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size:11px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--brass-dim);
+    margin-top:10px;
+    min-height:14px;
+  }
+
+  /* --- Pegs (string selector) --- */
+  .pegboard{
+    display:flex;
+    justify-content:space-between;
+    gap:6px;
+    margin:22px 0 20px;
+    padding:14px 10px;
+    background:rgba(0,0,0,0.25);
+    border-radius:12px;
+    border:1px solid rgba(255,255,255,0.03);
+  }
+
+  .peg{
+    flex:1;
+    background:radial-gradient(circle at 35% 30%, #d8ba5f, var(--brass) 55%, var(--brass-dim) 100%);
+    border:none;
+    border-radius:10px;
+    padding:9px 2px 7px;
+    cursor:pointer;
+    font-family:ui-monospace, 'SF Mono', Menlo, monospace;
+    font-weight:700;
+    font-size:13px;
+    color:#241608;
+    box-shadow:0 2px 0 rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.3) inset;
+    transition:transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+    filter:saturate(0.55) brightness(0.75);
+  }
+  .peg .oct{ display:block; font-size:9px; font-weight:400; opacity:0.7; }
+  .peg:active{ transform:translateY(1px); }
+  .peg.nearest{
+    filter:saturate(1.15) brightness(1.05);
+    box-shadow:0 2px 0 rgba(0,0,0,0.4), 0 0 10px rgba(240,207,110,0.55), 0 1px 0 rgba(255,255,255,0.4) inset;
+  }
+  .peg.locked{
+    outline:2px solid var(--good-bright);
+    outline-offset:1px;
+  }
+  .peg.in-tune{
+    filter:saturate(1.2) brightness(1.1);
+    box-shadow:0 2px 0 rgba(0,0,0,0.4), 0 0 14px rgba(168,209,151,0.8), 0 1px 0 rgba(255,255,255,0.4) inset;
+  }
+
+  /* --- Controls --- */
+  .controls{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+  }
+
+  .mic-btn{
+    font-family:ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size:13px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--ivory);
+    background:linear-gradient(180deg, #3a2618, #241608);
+    border:1px solid rgba(201,162,39,0.4);
+    border-radius:999px;
+    padding:11px 28px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    transition:background 150ms ease, border-color 150ms ease;
+  }
+  .mic-btn:hover{ border-color:var(--brass-bright); }
+  .mic-btn:focus-visible, .peg:focus-visible{
+    outline:2px solid var(--brass-bright);
+    outline-offset:2px;
+  }
+  .mic-btn.on{
+    background:linear-gradient(180deg, #4a3a1a, #2b2007);
+    border-color:var(--brass-bright);
+  }
+  .mic-dot{
+    width:8px; height:8px; border-radius:50%;
+    background:var(--warn);
+  }
+  .mic-btn.on .mic-dot{
+    background:var(--good-bright);
+    box-shadow:0 0 6px var(--good-bright);
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce){
+    .mic-btn.on .mic-dot{ animation:none; }
+  }
+  @keyframes pulse{
+    0%,100%{ opacity:1; } 50%{ opacity:0.4; }
+  }
+
+  .hint{
+    font-size:12px;
+    color:var(--ivory-dim);
+    text-align:center;
+    max-width:280px;
+    line-height:1.5;
+  }
+
+  .error{
+    color:var(--warn);
+    font-size:12px;
+    text-align:center;
+    max-width:300px;
+    line-height:1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="rack">
+  <p class="eyebrow">Stringworks</p>
+  <h1>Guitar Tuner</h1>
+
+  <div class="panel">
+
+    <div class="gauge-wrap">
+      <svg viewBox="0 0 300 160" aria-hidden="true">
+        <!-- tick marks from -50 to +50 cents, every 10 cents, drawn along an arc -->
+        <g id="ticks"></g>
+        <g id="needle" class="needle">
+          <line class="needle-line" x1="150" y1="150" x2="150" y2="45"></line>
+        </g>
+        <circle class="pivot" cx="150" cy="150" r="7"></circle>
+      </svg>
+    </div>
+
+    <div class="readout">
+      <div class="note-big" id="noteBig" aria-live="polite">–</div>
+      <div class="sub-readout">
+        <span id="freqOut">— Hz</span>
+        <span class="cents" id="centsOut">— ¢</span>
+      </div>
+    </div>
+
+    <div class="status-line" id="statusLine">mic idle</div>
+
+    <div class="pegboard" id="pegboard" role="group" aria-label="Guitar string selector"></div>
+
+    <div class="controls">
+      <button class="mic-btn" id="micBtn" type="button">
+        <span class="mic-dot"></span>
+        <span id="micBtnLabel">Start listening</span>
+      </button>
+      <p class="hint" id="hintText">Pick a string below to lock onto it, or leave it on auto and play any string — the tuner finds the closest note by itself.</p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const NOTE_STRINGS = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
+
+  const GUITAR_STRINGS = [
+    { name:"E", octave:2, freq:82.41 },
+    { name:"A", octave:2, freq:110.00 },
+    { name:"D", octave:3, freq:146.83 },
+    { name:"G", octave:3, freq:196.00 },
+    { name:"B", octave:3, freq:246.94 },
+    { name:"E", octave:4, freq:329.63 },
+  ];
+
+  const IN_TUNE_CENTS = 5;
+
+  // ---- DOM refs ----
+  const micBtn = document.getElementById("micBtn");
+  const micBtnLabel = document.getElementById("micBtnLabel");
+  const noteBig = document.getElementById("noteBig");
+  const freqOut = document.getElementById("freqOut");
+  const centsOut = document.getElementById("centsOut");
+  const statusLine = document.getElementById("statusLine");
+  const pegboard = document.getElementById("pegboard");
+  const needle = document.getElementById("needle");
+  const ticksGroup = document.getElementById("ticks");
+  const hintText = document.getElementById("hintText");
+
+  // ---- Build gauge ticks (arc from -50 to +50 cents mapped to -50deg..+50deg) ----
+  function centsToAngle(cents){
+    const clamped = Math.max(-50, Math.min(50, cents));
+    return clamped; // 1:1 degree mapping, -50..+50
+  }
+
+  function polar(cx, cy, r, angleDeg){
+    const rad = (angleDeg - 90) * Math.PI / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  }
+
+  (function drawTicks(){
+    const cx = 150, cy = 150;
+    for(let c=-50; c<=50; c+=10){
+      const isMajor = (c % 20 === 0);
+      const isCenter = (c === 0);
+      const r1 = 100, r2 = isCenter ? 78 : (isMajor ? 84 : 90);
+      const p1 = polar(cx, cy, r1, c);
+      const p2 = polar(cx, cy, r2, c);
+      const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+      line.setAttribute("x1", p1.x); line.setAttribute("y1", p1.y);
+      line.setAttribute("x2", p2.x); line.setAttribute("y2", p2.y);
+      line.setAttribute("class", "tick" + (isCenter ? " center" : isMajor ? " major" : ""));
+      ticksGroup.appendChild(line);
+
+      if(isMajor){
+        const lp = polar(cx, cy, 112, c);
+        const text = document.createElementNS("http://www.w3.org/2000/svg","text");
+        text.setAttribute("x", lp.x); text.setAttribute("y", lp.y + 3);
+        text.setAttribute("class", "tick-label");
+        text.textContent = c === 0 ? "0" : (c > 0 ? "+" + c : String(c));
+        ticksGroup.appendChild(text);
+      }
+    }
+  })();
+
+  // ---- Build peg buttons ----
+  let lockedIndex = null; // null = auto mode
+
+  GUITAR_STRINGS.forEach((s, i) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "peg";
+    btn.dataset.index = i;
+    btn.setAttribute("aria-label", `Lock tuner to ${s.name}${s.octave}`);
+    btn.innerHTML = `${s.name}<span class="oct">${s.octave}</span>`;
+    btn.addEventListener("click", () => {
+      if(lockedIndex === i){
+        lockedIndex = null; // tap again to release back to auto
+        hintText.textContent = "Auto mode: play any string and the tuner finds the closest note by itself.";
+      } else {
+        lockedIndex = i;
+        hintText.textContent = `Locked to ${s.name}${s.octave}. Tap it again to return to auto mode.`;
+      }
+      refreshPegStyles();
+    });
+    pegboard.appendChild(btn);
+  });
+
+  function refreshPegStyles(nearestIndex, inTune){
+    Array.from(pegboard.children).forEach((btn, i) => {
+      btn.classList.toggle("locked", lockedIndex === i);
+      btn.classList.toggle("nearest", lockedIndex === null && nearestIndex === i);
+      btn.classList.toggle("in-tune", (lockedIndex === i || (lockedIndex === null && nearestIndex === i)) && inTune);
+    });
+  }
+
+  // ---- Pitch math ----
+  function noteNumberFromPitch(frequency){
+    return 12 * (Math.log(frequency / 440) / Math.log(2)) + 69;
+  }
+  function frequencyFromNoteNumber(note){
+    return 440 * Math.pow(2, (note - 69) / 12);
+  }
+
+  // ---- Autocorrelation pitch detection ----
+  function autoCorrelate(buf, sampleRate){
+    const SIZE = buf.length;
+    let rms = 0;
+    for(let i=0;i<SIZE;i++){ const v = buf[i]; rms += v*v; }
+    rms = Math.sqrt(rms/SIZE);
+    if(rms < 0.01) return -1; // too quiet / no signal
+
+    let r1 = 0, r2 = SIZE-1;
+    const thres = 0.2;
+    for(let i=0;i<SIZE/2;i++){ if(Math.abs(buf[i]) < thres){ r1 = i; break; } }
+    for(let i=1;i<SIZE/2;i++){ if(Math.abs(buf[SIZE-i]) < thres){ r2 = SIZE-i; break; } }
+
+    const trimmed = buf.slice(r1, r2);
+    const n = trimmed.length;
+    if(n < 2) return -1;
+
+    const c = new Array(n).fill(0);
+    for(let i=0;i<n;i++){
+      for(let j=0;j<n-i;j++){
+        c[i] += trimmed[j] * trimmed[j+i];
+      }
+    }
+
+    let d = 0;
+    while(d < n-1 && c[d] > c[d+1]) d++;
+
+    let maxVal = -1, maxPos = -1;
+    for(let i=d;i<n;i++){
+      if(c[i] > maxVal){ maxVal = c[i]; maxPos = i; }
+    }
+    let T0 = maxPos;
+
+    if(T0 > 0 && T0 < n-1){
+      const x1 = c[T0-1], x2 = c[T0], x3 = c[T0+1];
+      const a = (x1 + x3 - 2*x2) / 2;
+      const b = (x3 - x1) / 2;
+      if(a !== 0) T0 = T0 - b / (2*a);
+    }
+
+    if(T0 <= 0) return -1;
+    return sampleRate / T0;
+  }
+
+  // ---- Audio setup ----
+  let audioCtx = null;
+  let analyser = null;
+  let mediaStream = null;
+  let sourceNode = null;
+  let rafId = null;
+  let buf = null;
+  let smoothedFreq = null;
+  let listening = false;
+
+  async function startListening(){
+    try{
+      statusLine.textContent = "requesting mic access…";
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        }
+      });
+
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+      buf = new Float32Array(analyser.fftSize);
+
+      sourceNode = audioCtx.createMediaStreamSource(mediaStream);
+      sourceNode.connect(analyser);
+
+      listening = true;
+      micBtn.classList.add("on");
+      micBtnLabel.textContent = "Stop listening";
+      statusLine.textContent = "listening…";
+      smoothedFreq = null;
+      tick();
+    } catch(err){
+      statusLine.textContent = "mic access denied";
+      hintText.innerHTML = `<span class="error">Couldn't access the microphone. Check your browser's site permissions and try again.</span>`;
+    }
+  }
+
+  function stopListening(){
+    listening = false;
+    if(rafId) cancelAnimationFrame(rafId);
+    if(mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+    if(audioCtx) audioCtx.close();
+    audioCtx = null; analyser = null; mediaStream = null; sourceNode = null;
+    micBtn.classList.remove("on");
+    micBtnLabel.textContent = "Start listening";
+    statusLine.textContent = "mic idle";
+    noteBig.innerHTML = "–";
+    freqOut.textContent = "— Hz";
+    centsOut.textContent = "— ¢";
+    centsOut.classList.remove("in-tune");
+    needle.classList.remove("in-tune");
+    needle.style.transform = "rotate(0deg)";
+    refreshPegStyles(undefined, false);
+  }
+
+  function tick(){
+    if(!listening) return;
+    analyser.getFloatTimeDomainData(buf);
+    const pitch = autoCorrelate(buf, audioCtx.sampleRate);
+
+    if(pitch !== -1 && pitch > 30 && pitch < 1200){
+      smoothedFreq = smoothedFreq === null ? pitch : smoothedFreq * 0.75 + pitch * 0.25;
+      updateDisplay(smoothedFreq);
+      statusLine.textContent = "listening…";
+    } else {
+      statusLine.textContent = "listening… (play a note)";
+    }
+
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function updateDisplay(freq){
+    let targetFreq, label, octave, nearestIndex;
+
+    if(lockedIndex !== null){
+      const s = GUITAR_STRINGS[lockedIndex];
+      targetFreq = s.freq;
+      label = s.name;
+      octave = s.octave;
+      nearestIndex = lockedIndex;
+    } else {
+      const noteNum = Math.round(noteNumberFromPitch(freq));
+      targetFreq = frequencyFromNoteNumber(noteNum);
+      label = NOTE_STRINGS[((noteNum % 12) + 12) % 12];
+      octave = Math.floor(noteNum / 12) - 1;
+
+      // find nearest guitar string just for the peg highlight
+      let best = 0, bestDist = Infinity;
+      GUITAR_STRINGS.forEach((s, i) => {
+        const dist = Math.abs(1200 * Math.log2(freq / s.freq));
+        if(dist < bestDist){ bestDist = dist; best = i; }
+      });
+      nearestIndex = best;
+    }
+
+    const cents = Math.round(1200 * Math.log2(freq / targetFreq));
+    const inTune = Math.abs(cents) <= IN_TUNE_CENTS;
+
+    const accidental = label.length > 1 ? `<span class="accidental">${label.slice(1)}</span>` : "";
+    noteBig.innerHTML = `${label[0]}${accidental}<span class="octave">${octave}</span>`;
+    freqOut.textContent = `${freq.toFixed(2)} Hz`;
+    centsOut.textContent = `${cents > 0 ? "+" : ""}${cents} ¢`;
+    centsOut.classList.toggle("in-tune", inTune);
+
+    const angle = centsToAngle(cents);
+    needle.style.transform = `rotate(${angle}deg)`;
+    needle.classList.toggle("in-tune", inTune);
+
+    refreshPegStyles(nearestIndex, inTune);
+  }
+
+  micBtn.addEventListener("click", () => {
+    if(listening) stopListening();
+    else startListening();
+  });
+
+  refreshPegStyles();
+})();
+</script>
+
+</body>
+</html>
